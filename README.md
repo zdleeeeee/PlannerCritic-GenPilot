@@ -29,16 +29,14 @@ CriticPilot is an extension of [GenPilot](https://github.com/27yw/GenPilot), a m
 
 ```bash
 # Clone this repository
-git clone https://github.com/yourusername/CriticPilot.git
+git clone https://github.com/zdleeeeee/PlannerCritic-GenPilot.git
 cd CriticPilot
 
-# Clone GenPilot as a subdirectory (official code)
-git clone https://github.com/27yw/GenPilot.git genpilot
-
-# Install dependencies
-pip install -r requirements.txt   # your own requirements
-pip install -r genpilot/requirements.txt
+# Install environment and dependencies
+uv sync
 ```
+
+> **Note**: We update the package `mkl-service` of genpilot's environment from 2.4.0 to 2.5.2 to fix the issue of `mkl-service` not working with Python 3.12.
 
 ## Quick Start
 
@@ -61,8 +59,8 @@ See experiments/demo.ipynb for more examples.
 ## Project Structure
 
 ```text
-CriticPilot/
-├── criticpilot/           # Your code (Critic modules)
+PlannerCritic-GenPilot/
+├── PlannerCritic-GenPilot/           # Your code (Critic modules)
 │   ├── __init__.py
 │   ├── critic_checkpoints.py
 │   └── backtracking.py
