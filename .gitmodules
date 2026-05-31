@@ -1,0 +1,3 @@
+[submodule "genpilot"]
+	path = genpilot
+	url = https://github.com/27yw/GenPilot.git
