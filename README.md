@@ -30,7 +30,7 @@ CriticPilot is an extension of [GenPilot](https://github.com/27yw/GenPilot), a m
 ```bash
 # Clone this repository
 git clone https://github.com/zdleeeeee/PlannerCritic-GenPilot.git
-cd CriticPilot
+cd PlannerCritic-GenPilot
 
 # Install environment and dependencies
 uv sync
@@ -41,9 +41,9 @@ uv sync
 ## Quick Start
 
 ```python
-from criticpilot import CriticPilot
+from planner_critic import PlannerCritic
 
-pilot = CriticPilot(
+pilot = PlannerCritic(
     mllm_model="qwen2.5-vl-72b",   # or gpt-4o / gemini-2.0-pro
     t2i_model="flux-schnell",
     max_iterations=5
@@ -60,11 +60,11 @@ See experiments/demo.ipynb for more examples.
 
 ```text
 PlannerCritic-GenPilot/
-├── PlannerCritic-GenPilot/           # Your code (Critic modules)
+├── PlannerCritic_GenPilot/
 │   ├── __init__.py
 │   ├── critic_checkpoints.py
 │   └── backtracking.py
-├── genpilot/              # Official GenPilot (submodule / subdirectory)
+├── genpilot/              # Official GenPilot
 ├── experiments/           # Testing scripts
 │   ├── baseline_test.py
 │   └── critic_ablation.py
