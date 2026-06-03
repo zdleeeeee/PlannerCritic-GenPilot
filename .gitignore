@@ -1,2 +1,7 @@
 # venv
 .venv/
+.env
+results/*
+data/ori_img/*
+genpilot/utils_all/__pycache__
+genpilot/error_analysis_pipline.sh

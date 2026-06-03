@@ -32,29 +32,43 @@ CriticPilot is an extension of [GenPilot](https://github.com/27yw/GenPilot), a m
 git clone https://github.com/zdleeeeee/PlannerCritic-GenPilot.git
 cd PlannerCritic-GenPilot
 
+# Copy .env
+cp .env.example .env
+
+cp genpilot/error_analysis_pipline.sh.example genpilot/error_analysis_pipline.sh
+
 # Install environment and dependencies
 uv sync
+
+# Download t2l model if needed
+hf download black-forest-labs/FLUX.1-schnell --local-dir <your local download path>
 ```
 
 > **Note**: We update the package `mkl-service` of genpilot's environment from 2.4.0 to 2.5.2 to fix the issue of `mkl-service` not working with Python 3.12.
 
-## Quick Start
+## model
 
-```python
-from planner_critic import PlannerCritic
+MLLM: Qwen3-VL-8B-Instruct
 
-pilot = PlannerCritic(
-    mllm_model="qwen2.5-vl-72b",   # or gpt-4o / gemini-2.0-pro
-    t2i_model="flux-schnell",
-    max_iterations=5
-)
+T2L: FLUX.1
 
-best_prompt, final_image = pilot.optimize(
-    "A red apple on a wooden table, soft morning light, shallow depth of field"
-)
+## Run the Error Analysis
+
+You need to modify `error_analysis_pipline.sh` to fill in your own config first.
+
+```bash
+chmod -x error_analysis_pipline.sh
+
+./error_analysis_pipline.sh
 ```
 
-See experiments/demo.ipynb for more examples.
+## Run the Test-Time Prompt Optimization
+
+### Baseline
+
+```bash
+python run_baseline
+```
 
 ## Project Structure
 
