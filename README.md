@@ -81,10 +81,13 @@ PlannerCritic-GenPilot/
 │   ├── critic_checkpoints.py
 │   └── backtracking.py
 ├── genpilot/              # Official GenPilot
-├── experiments/           # Testing scripts
-│   ├── baseline_test.py
-│   └── critic_ablation.py
+├── run_baseline.py
+├── data/                  # input folder
+│   ├── ori_img/
+│   └── original_prompts.txt
 ├── results/               # Outputs and logs
+│   ├── baseline/
+│   └── critic/
 ├── report/                # Course report & slides
 └── README.md
 ```
