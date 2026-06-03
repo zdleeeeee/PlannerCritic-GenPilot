@@ -64,11 +64,13 @@ chmod -x error_analysis_pipline.sh
 
 ## Run the Test-Time Prompt Optimization
 
-### Baseline
+### GenPilot(Baseline)
 
 ```bash
-python run_baseline
+python run_baseline.py
 ```
+
+### PlannerCritic-GenPilot
 
 ## Project Structure
 

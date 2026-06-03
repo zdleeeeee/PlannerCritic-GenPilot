@@ -12,14 +12,11 @@ from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
 
-# 自动检测项目根目录（当前脚本所在目录）
 PROJECT_ROOT = Path(__file__).parent.absolute()
 GENPILOT_DIR = PROJECT_ROOT / "genpilot"
 
-# 确保 genpilot 在 Python 路径中
 sys.path.insert(0, str(GENPILOT_DIR))
 
-# 加载环境变量
 load_dotenv(PROJECT_ROOT / ".env")
 
 # ========== 配置 ==========
@@ -46,7 +43,7 @@ print("=" * 50)
 # ========== 构建命令 ==========
 cmd = [
     sys.executable,  # 当前 Python 解释器
-    str(GENPILOT_DIR / "ttpo.py"),
+    str("ttpo.py"),
     "--case_id", str(CASE_ID_FILE),
     "--cuda", os.getenv("CUDA_DEVICE", "cuda:0"),
     "--input_folder", str(INPUT_FOLDER),
@@ -64,11 +61,15 @@ print("\n" + "=" * 50)
 
 # ========== 运行 ==========
 try:
-    result = subprocess.run(cmd, capture_output=False, text=True, check=True)
+    result = subprocess.run(
+        cmd,
+        cwd=GENPILOT_DIR,
+        capture_output=False,
+        text=True,
+        check=True)
     print("\n✅ 基线测试完成！")
     print(f"📁 结果保存在: {RUN_DIR}")
     
-    # 保存运行信息
     info = {
         "timestamp": TIMESTAMP,
         "case_ids": CASE_IDS.split(","),
