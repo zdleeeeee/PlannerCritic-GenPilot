@@ -7,6 +7,7 @@ from openai import OpenAI
 # from gpt_proxy import OpenAIApiProxy
 import os
 import json
+import re
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -74,66 +75,97 @@ def qa_batch_check(client,questions,prompt,img_path,template):
         #         error_list.append(qa_check(questions,prompt,img,template))
         return error_list, ans_list
 
+def parse_rating_response(response_text):
+    if response_text is None:
+        return None
+
+    for candidate in _json_candidates(response_text):
+        try:
+            parsed = json.loads(_clean_json_text(candidate))
+            return _normalize_rate_result(parsed)
+        except (json.JSONDecodeError, TypeError, ValueError, KeyError):
+            continue
+    return None
+
+
+def _json_candidates(response_text):
+    text = response_text.strip()
+    fenced_blocks = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.IGNORECASE | re.DOTALL)
+    for block in fenced_blocks:
+        yield block
+    if text.startswith("{") and text.endswith("}"):
+        yield text
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and start < end:
+        yield text[start:end + 1]
+
+
+def _clean_json_text(text):
+    return re.sub(r",\s*([}\]])", r"\1", text.strip())
+
+
+def _normalize_rate_result(rate_result):
+    required_aspects = ["Attribute-Binding", "Object-Relationship", "Background-Consistency"]
+    scores = rate_result["scores"]
+    reasons = rate_result["reasons"]
+    normalized = {"scores": {}, "reasons": {}}
+    for aspect in required_aspects:
+        score = _coerce_score(scores[aspect])
+        normalized["scores"][aspect] = score
+        normalized["reasons"][aspect] = str(reasons[aspect]).strip()
+    return normalized
+
+
+def _coerce_score(value):
+    if isinstance(value, list):
+        if not value:
+            raise ValueError("empty score list")
+        value = value[0]
+    score = int(value)
+    if score < 1 or score > 5:
+        raise ValueError(f"score out of range: {score}")
+    return score
+
+
+def _fallback_rate_result():
+    return {
+        "scores": {
+            "Attribute-Binding": 1,
+            "Object-Relationship": 1,
+            "Background-Consistency": 1,
+        },
+        "reasons": {
+            "Attribute-Binding": "The rating response could not be parsed after retries.",
+            "Object-Relationship": "The rating response could not be parsed after retries.",
+            "Background-Consistency": "The rating response could not be parsed after retries.",
+        },
+    }
+
+
 def rate_ori(client,prompt_before,error_before,propmpt_after,error_after,img,template):
     img_b64_str = encode_image(img)
     user_textprompt_rate=f"""Input: \n original prompt: \n {prompt_before} \n errors in round 1: \n {error_before} \n modified prompt: \n {propmpt_after} \n errors in round 2: \n {error_after} """
-    # user_textprompt_rate=f"""Input: \n original prompt: \n {prompt_init_init} \n errors in round 1: \n {image_data[i]['errors'][str(j+1)]} \n modified prompt: \n {prompt_init} \n """
     textprompt_rate= f"{' '.join(template)} \n {user_textprompt_rate}"
     scores = client.request_gpt_with_image(textprompt_rate, "image/png", img_b64_str)
-    # 将字典转化为JSON格式
-    if scores is None:
-        rate_result = None
-        return rate_result
-    scores_start = scores.find("```json")
-    score_end = scores.rfind("}")
-    if scores_start != -1 and score_end != -1:
-        scores_post_process = scores[scores_start+len("```json"):score_end+1]
-        # print("scores_post_process")
-        # print(scores_post_process)
-        # print("!!!!!!!!!!!!!!!!!!")
-        try:
-            rate_result = json.loads(scores_post_process)
-        except Exception:
-            rate_result = None
-            print("score format wrong!!!!!!!!!")
-    else:
-        print(scores)
-        print("WARNING!!!!!!!!!!!!!!!!!! score format wrong")
-        rate_result = None
-    return rate_result
+    return parse_rating_response(scores)
+
 
 def rate(client,prompt_before, error_before, propmpt_after, error_after, img, template, max_retries=5, retry_delay=2):
-    """请求 GPT 评分，失败时重试"""
     img_b64_str = encode_image(img)
     user_textprompt_rate = f"""Input: \n original prompt: \n {prompt_before} \n errors in round 1: \n {error_before} \n modified prompt: \n {propmpt_after} \n errors in round 2: \n {error_after} """
     textprompt_rate = f"{' '.join(template)} \n {user_textprompt_rate}"
 
     for attempt in range(max_retries):
         scores = client.request_gpt_with_image(textprompt_rate, "image/png", img_b64_str)
-
-        if scores is None:
-            print(f"Attempt {attempt+1}: No response, retrying...")
-            time.sleep(retry_delay)
-            continue  # 重新请求
-
-        scores_start = scores.find("```json")
-        score_end = scores.rfind("}")
-
-        if scores_start != -1 and score_end != -1:
-            scores_post_process = scores[scores_start+len("```json"):score_end+1]
-            try:
-                rate_result = json.loads(scores_post_process)
-                return rate_result  # 解析成功，直接返回
-            except json.JSONDecodeError:
-                print(f"Attempt {attempt+1}: JSON format error, retrying...")
-                time.sleep(retry_delay)
-                continue  # 解析失败，重新请求
-
-        print(f"Attempt {attempt+1}: WARNING! refused answer, retrying...")
+        rate_result = parse_rating_response(scores)
+        if rate_result is not None:
+            return rate_result
+        print(f"Attempt {attempt+1}: rating JSON parse failed, retrying...")
         time.sleep(retry_delay)
 
-    print("Max retries reached, returning None")
-    return None  # 达到最大重试次数，返回 None
+    print("Max retries reached, using fallback rating")
+    return _fallback_rate_result()
 
 def safe_to_int(val):
     """将值安全地转为 int，根据类型处理"""
@@ -205,14 +237,14 @@ def batch_rate(client,img_path,prompt_before,error_before,prompt_after,error_lis
         rate_list = [None] * len(img_path)  # 预先创建一个与 img_path 相同大小的空列表，用于存储结果
 
         def process_rate(i):
-            # 对每个索引 i 执行 rate 操作
-            
             rate_result = rate(client,prompt_before, error_before, prompt_after, error_list[i], img_path[i], template)
             count_num = 0
-            while rate_result is None or count_num < 2:
+            while rate_result is None and count_num < 2:
                 rate_result = rate(client,prompt_before, error_before, prompt_after, error_list[i], img_path[i], template)
                 count_num += 1
-            return i, rate_result  # 返回索引 i 和对应的结果
+            if rate_result is None:
+                rate_result = _fallback_rate_result()
+            return i, rate_result
 
         # 使用 ThreadPoolExecutor 并发执行任务
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:

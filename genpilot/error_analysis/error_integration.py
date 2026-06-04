@@ -67,6 +67,7 @@ if __name__ == '__main__':
     parser.add_argument('--api_key', type=str, required=True, help='Api_key for API request')
     parser.add_argument('--url', type=str, required=True, help='Base_url for API request')
     parser.add_argument('--api_model', type=str, required=True, help='Model for API request')
+    parser.add_argument('--workers', type=int, default=1, help='Parallel API workers')
     args = parser.parse_args()
     input_folder = args.input_folder
     output_folder = args.output_folder
@@ -88,7 +89,7 @@ if __name__ == '__main__':
     output_data = [None] * len(image_data)
 
     with open(output_file, 'w', encoding='utf-8') as out:
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=max(1, args.workers)) as executor:
             for json_str in tqdm(executor.map(process_wrapper, range(len(image_data))), total=len(image_data)):
                 out.write(json_str + "\n")  # 写入 JSONL 格式数据
                 out.flush()  # 立即写入磁盘
