@@ -48,7 +48,7 @@ CriticPilot在GenPilot的标准优化循环中插入以下三个核心模块：
 
 ### 4.1 总体评分表现
 
-8个批次的汇总数据显示，CriticPilot平均得分达到13.791，基线为13.308，提升**+0.483分**（相对提升约3.6%）。除Batch6基本持平（Δ = -0.033）外，其余7个批次均录得正向收益，其中Batch4增益最显著，Δ达+0.842，证明该机制具有良好的泛化性。
+10个批次的汇总数据显示，CriticPilot平均得分达到13.7604，基线为13.3485，提升**+0.4118分**。除Batch6基本持平（Δ = -0.033）外，其余7个批次均录得正向收益，其中Batch4增益最显著，Δ达+0.841，证明该机制具有良好的泛化性。
 
 | Batch   | Baseline avg | Critic avg | Delta  | L1   | L3   | Baseline scored rounds | Critic  scored rounds | Scored rounds  difference |
 | ------- | ------------ | ---------- | ------ | ---- | ---- | ---------------------- | --------------------- | ------------------------- |
@@ -64,31 +64,64 @@ CriticPilot在GenPilot的标准优化循环中插入以下三个核心模块：
 | 10      | 13.875       | 14.333     | 0.458  | 1    | 1    | 32                     | 21                    | -11                       |
 | Overall | 13.3485      | 13.7604    | 0.4118 | 14.2 | 2.8  | 43                     | 41.5                  | -1.5                      |
 
+![](.\overall\Baseline avg vs Critic avg.png)
+
+![Delta](.\overall\Delta.png)
+
 ### 4.2 计算开销与效率
 
-通常情况下，重试与重置机制会带来额外计算开销。然而实验数据表明：CriticPilot的平均评估轮次为39.75，低于基线的42.5，平均减少**2.75轮**。原因在于L1与L3起到了“剪枝”与“导航”的双重作用：局部重试避免了无效低分轮次被计入并浪费后续优化；全局重置则果断终止停滞路径，将计算资源重新投向更宽广的搜索空间。
+通常情况下，重试与重置机制会带来额外计算开销。然而实验数据表明：CriticPilot的平均评估轮次为41.5，低于基线的43，平均减少**1.5轮**。原因在于L1与L3起到了“剪枝”与“导航”的双重作用：局部重试避免了无效低分轮次被计入并浪费后续优化；全局重置则果断终止停滞路径，将计算资源重新投向更宽广的搜索空间。
+
+![](.\overall\Baseline scored rounds vs Critic scored rounds.png)
+
+![Scored rounds difference](.\overall\Scored rounds difference.png)
 
 ### 4.3 机制触发频率
 
-统计每个批次的平均触发次数：L1触发10.0次，L3触发4.1次。L1的高频触发说明原始优化过程中经常产生低质量候选，局部重试提供了一种廉价的自救手段。L3触发频次较低但意义重大——每次全局重置都使系统挣脱错误历史的束缚，获得重新探索并找到更优解的机会（如Batch4中L3触发后分数显著跃升）。
+统计每个批次的平均触发次数：L1触发14.2次，L3触发2.8次。L1的高频触发说明原始优化过程中经常产生低质量候选，局部重试提供了一种廉价的自救手段。L3触发频次较低但意义重大——每次全局重置都使系统挣脱错误历史的束缚，获得重新探索并找到更优解的机会（如Batch4中L3触发后分数显著跃升）。这一频率印证了停滞并非偶发现象，而是线性优化固有的弊端。
+
+![](.\overall\L1 and L3 trigger counts.png)
 
 ## 5. 案例分析与异常值探讨
 
 ### 5.1 成功案例A：精确计数约束（Batch1）
 
-原始提示词（节选）：*“A cabbage field with exactly 8 cabbages, each cabbage has dewdrops, and the field is covered with light mist.”*
+原始提示词（节选）：“A cabbage field with exactly 8 cabbages, each cabbage has dewdrops, and
+the field is covered with light mist.”
 
-基线问题：生成的卷心菜数量经常偏离8，且露珠、薄雾时常丢失。CriticPilot通过错误聚合将焦点锁定于“计数”与“可见度”，经L1/L3反复介入后，系统演化出强约束表达，最高分从13跃升至15。
+Baseline 问题：生成的卷心菜数量经常偏离 8，且露珠、薄雾时常丢失，得分在 12 分左右震荡。
+
+机制作用：Error Aggregator 将错误聚焦于“计数”与“可见度”。通过 L1/L3 的反复介入，系统演化出极强的硬性约束，例如：“… featuring exactly eight distinct cabbages, no more and no fewer. Every
+cabbage must display visible dew droplets. A light veil of mist hangs over the entire field …”。最高
+分从 13 跃升至 15（满分），优化上限被成功打破。
 
 ### 5.2 成功案例B：消除物体幻觉（Batch4）
 
-原始提示词：*“A silver bracelet resting on a chessboard, the bracelet is compact, not larger than one square.”*
+原始提示词：“A silver bracelet resting on a chessboard, the bracelet is compact, not larger than
+one square.”
 
-基线问题：将“银手镯”错误生成为“听诊器”，且尺寸失控。CriticPilot通过错误聚合锁定“错误物体类型”与“尺寸失控”，生成了高度针对性的负面约束（如排除听诊器部件），稳定消除幻觉，Δ达+0.842。
+Baseline 问题：产生严重幻觉，将“银手镯”错误生成为带管状结构的“听诊器”，且尺寸巨大横跨多个棋
+盘格。
+
+机制作用：错误聚合锁定“错误物体类型”和“尺寸失控”两大核心问题。系统生成了高度针对性的负面提示
+词（明确排除听诊器部件，如 “no chestpiece, no tubes”）以及利用场景参照物的空间约束（“the
+bracelet must be no larger than one chessboard square”）。稳定消除了幻觉，大幅提高了生成质量
+下限，最低分轮次显著减少，因此 Batch 4 的 Δ 高达 +0.841。
 
 ### 5.3 异常值剖析：Batch6
 
-Batch6是唯一Δ为负的批次（-0.033）。两者最高分均为满分15，评估轮次相同（60轮）。根因在于基线在该提示词上表现已较强，Critic为强化物体区分采取了过于激进的排他性描述，反而偏离了原始提示的固有要求。这表明当基线已逼近性能上限时，Critic的强约束可能导致过度修正，未来可引入自适应干预策略加以缓解。
+在所有 10 个批次中，Batch 6 是唯一 Δ 为负（‑0.033）的批次。两者最高分均为满分 15，评估轮次也
+完全相同（60 轮），差异仅来源于候选质量的微小波动。
+
+案例细节：提示词要求 “A vintage fan with a rounded base placed beside an antique knife on a
+wooden table”。Baseline 表现已较强，但 Critic 为强化风扇与刀的区分，采取了过于激进的排他性描述
+（如 “loose circular fan head / no pedestal base”），这反而偏离了原始提示中关于 “rounded base”
+的固有要求，导致部分轮次分数轻微下降。
+
+根因与启示：当 Baseline 已逼近性能上限，或原始提示本身存在语义歧义时，Critic 的强约束可能导致
+过度修正。该边界条件揭示：未来可引入自适应干预策略，在优化后期适当降低重试与重置的激进程
+度，以避免因过度拟合错误信号而引入新矛盾。总体而言，Batch 6 更应被视为 “Critic 与 Baseline 基
+本持平”，而非显著失败。
 
 ## 6. 结论
 
@@ -98,7 +131,7 @@ Batch6是唯一Δ为负的批次（-0.033）。两者最高分均为满分15，�
 2. **上下限双提升**：L1局部重试抑制低分轮次，稳固性能下限；L3全局重置清除历史污染，拔高分数上限。
 3. **高鲁棒性**：在87.5%的测试批次中获正向收益，仅在一个存在歧义的场景中出现可接受的微小回退，未发生崩溃。
 
-综上，CriticPilot作为一种架构改动极小、无额外LLM调用的轻量级方案，以极高的效费比解决了提示词自动优化中的算力浪费与停滞难题。
+综上，CriticPilot作为一种架构改动极小、无额外LLM调用的轻量级方案，以较高的效费比在一定程度上解决了提示词自动优化中的算力浪费与停滞难题。
 
 ---
 
