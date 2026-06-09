@@ -1,8 +1,8 @@
-# CriticPilot-Lite 最新优化总结
+# CriticPilot 最新优化总结
 
 ## 1. 当前目标
 
-本项目基于 GenPilot 的 TTPO 流程加入 CriticPilot-Lite 机制，用于比较原始 baseline 与带轻量批判机制的 critic 版本。
+本项目基于 GenPilot 的 TTPO 流程加入 CriticPilot 机制，用于比较原始 baseline 与带轻量批判机制的 critic 版本。
 
 目前脚本已经支持：
 
