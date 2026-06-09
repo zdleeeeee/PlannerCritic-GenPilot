@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument('--api_key', type=str, required=True, help='Api_key for API request')
     parser.add_argument('--url', type=str, required=True, help='Base_url for API request')
     parser.add_argument('--api_model', type=str, required=True, help='Model for API request')
+    parser.add_argument('--workers', type=int, default=1, help='Parallel API workers')
     # 解析命令行参数
     args = parser.parse_args()
     input_folder = args.input_folder
@@ -52,7 +53,7 @@ if __name__ == "__main__":
 
     # 使用 ThreadPoolExecutor 进行并发处理
     with open(output_path, 'w') as out:
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=max(1, args.workers)) as executor:
             # 使用进度条处理结果
             for caption in tqdm(executor.map(process_image, sorted_imgs), total=len(sorted_imgs)):
                 out.write(f"{caption}\n")

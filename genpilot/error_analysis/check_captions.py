@@ -55,6 +55,7 @@ if __name__ == '__main__':
     parser.add_argument('--api_key', type=str, required=True, help='Api_key for API request')
     parser.add_argument('--url', type=str, required=True, help='Base_url for API request')
     parser.add_argument('--api_model', type=str, required=True, help='Model for API request')
+    parser.add_argument('--workers', type=int, default=1, help='Parallel API workers')
     # 解析命令行参数
     args = parser.parse_args()
     input_folder = args.input_folder
@@ -79,7 +80,7 @@ if __name__ == '__main__':
     output_data = []
     # print(image_data[0]['prompt'])
 # 创建 ThreadPoolExecutor 来进行高并发处理
-    with concurrent.futures.ThreadPoolExecutor() as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.workers)) as executor:
         futures = []
         output_data = [None] * len(image_data)  # 用于存储结果，并确保顺序一致
         # 提交每个任务
