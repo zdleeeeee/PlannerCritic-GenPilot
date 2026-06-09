@@ -111,4 +111,4 @@ We evaluate baseline GenPilot and CriticPilot on 50 prompt generation tasks from
 | 10      | 13.875       | 14.333     | 0.458  | 1    | 1    | 32                     | 21                    | -11                       |
 | Overall | 13.3485      | 13.7604    | 0.4118 | 14.2 | 2.8  | 43                     | 41.5                  | -1.5                      |
 
-Detailed results and failure cases are in report/experiments.pdf.
+Detailed results and failure cases are in report/report.pdf.

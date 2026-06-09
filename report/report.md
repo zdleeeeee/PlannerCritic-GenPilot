@@ -64,23 +64,23 @@ CriticPilot在GenPilot的标准优化循环中插入以下三个核心模块：
 | 10      | 13.875       | 14.333     | 0.458  | 1    | 1    | 32                     | 21                    | -11                       |
 | Overall | 13.3485      | 13.7604    | 0.4118 | 14.2 | 2.8  | 43                     | 41.5                  | -1.5                      |
 
-![](.\overall\Baseline avg vs Critic avg.png)
+![](overall\Baseline-avg-vs-Critic-avg.png)
 
-![Delta](.\overall\Delta.png)
+![Delta](overall\Delta.png)
 
 ### 4.2 计算开销与效率
 
 通常情况下，重试与重置机制会带来额外计算开销。然而实验数据表明：CriticPilot的平均评估轮次为41.5，低于基线的43，平均减少**1.5轮**。原因在于L1与L3起到了“剪枝”与“导航”的双重作用：局部重试避免了无效低分轮次被计入并浪费后续优化；全局重置则果断终止停滞路径，将计算资源重新投向更宽广的搜索空间。
 
-![](.\overall\Baseline scored rounds vs Critic scored rounds.png)
+![](overall\Baseline-scored-rounds-vs-Critic-scored-rounds.png)
 
-![Scored rounds difference](.\overall\Scored rounds difference.png)
+![Scored rounds difference](overall\Scored-rounds-difference.png)
 
 ### 4.3 机制触发频率
 
 统计每个批次的平均触发次数：L1触发14.2次，L3触发2.8次。L1的高频触发说明原始优化过程中经常产生低质量候选，局部重试提供了一种廉价的自救手段。L3触发频次较低但意义重大——每次全局重置都使系统挣脱错误历史的束缚，获得重新探索并找到更优解的机会（如Batch4中L3触发后分数显著跃升）。这一频率印证了停滞并非偶发现象，而是线性优化固有的弊端。
 
-![](.\overall\L1 and L3 trigger counts.png)
+![](overall\L1-and-L3-trigger-counts.png)
 
 ## 5. 案例分析与异常值探讨
 
