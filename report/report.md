@@ -1,54 +1,114 @@
 # CriticPilot: GenPilot with Planner-Critic Mechanism
 
-**课程**：计算机图形学A（2026春季·复旦大学）— 项目三
+**Course**: Computer Graphics A (Spring 2026 · Fudan University) — Project 3
 
 ---
 
-## 1. 研究背景与动机
+## Abstract
 
-文本到图像（T2I）生成中的测试时提示优化旨在通过迭代改进提示词，使生成图像更精准地符合用户意图。以GenPilot为代表的近期工作，利用多模态大语言模型对生成图像进行细粒度错误分析，并据此生成修正建议。然而，GenPilot采用线性前馈管道，缺乏内部验证机制。正如原作者所承认的，基于VQA的错误检测在复杂场景中并不可靠。一旦早期轮次的错误分析出现偏差，后续优化将建立于错误前提之上，导致问题累积且无法自我纠正。
+Test-time prompt optimization in text-to-image generation aims to improve prompts through iterative refinement to make generated images more accurately match user intent. However, existing methods like GenPilot adopt a linear feed-forward pipeline lacking internal verification mechanisms, facing two core bottlenecks: error overload and history pollution. Inspired by PixelCraft's Planner-Critic architecture, this paper proposes CriticPilot, a lightweight extension to GenPilot. CriticPilot embeds three core modules into the original optimization process: an error aggregator, L1 local retry, and L3 global reset, endowing the system with self-correction capabilities. Experiments on 10 batches of complex prompts demonstrate that CriticPilot achieves an average score improvement of 0.4118 points (13.3485 → 13.7604), while reducing average evaluation rounds by 1.5, validating the effectiveness and efficiency of the proposed mechanisms.
 
-具体而言，GenPilot面临两大核心瓶颈：
+**Open Source Code**: https://github.com/zdleeeeee/PlannerCritic-GenPilot
 
-- **错误过载（Error Overload）**：细粒度错误分析可能产生大量冗余错误描述（实测中单个提示词片段可达500余条），导致优化目标发散、关键修正方向被掩盖。
-- **历史污染（History Pollution）**：基于线性累积的优化范式会将早期迭代中产生的错误修改记录持续传递给后续轮次。一旦早期偏离正确方向，错误便会不断累积，最终使分数停滞在局部最优。
+---
 
-受**PixelCraft的Planner-Critic架构**启发——该架构引入批判智能体审查推理轨迹，并在检测到错误时触发回溯——我们提出**CriticPilot**，一个对GenPilot的扩展。CriticPilot在原有优化流程中嵌入Planner-Critic机制，通过错误聚合与分级回溯，赋予系统自校正能力，实现测试时提示优化的高效闭环。
+## 1. Introduction
 
-## 2. 架构设计
+The field of text-to-image (T2I) generation has made significant progress in recent years, but enabling generated images to accurately match complex textual descriptions remains an open challenge. Test-Time Prompt Optimization, as a lightweight solution that requires no model fine-tuning, has garnered widespread attention by iteratively improving prompts to enhance generation quality.
 
-CriticPilot在GenPilot的标准优化循环中插入以下三个核心模块：
+GenPilot (Yuan et al., 2025) is a representative work in this field, leveraging multimodal large language models to conduct fine-grained error analysis on generated images and generate correction suggestions accordingly, achieving excellent results on multiple benchmarks. However, GenPilot employs a **linear feed-forward pipeline** lacking internal verification mechanisms. As the authors acknowledge, VQA-based error detection is unreliable in complex scenarios. Once early-round error analysis deviates, subsequent optimization builds upon erroneous premises, leading to problem accumulation without the ability to self-correct.
 
-### 2.1 错误聚合器（Error Aggregator）
+Specifically, GenPilot faces two core bottlenecks:
 
-在每轮优化分析前，对当前提示词相关的所有错误反馈进行语义聚类，按实体、属性等维度去重，并将每个提示词片段关联的错误数量强制约束至不超过5条。该操作将冗余错误压缩一个数量级，聚焦关键修正点，从根本上避免优化信号过载。
+- **Error Overload**: Fine-grained error analysis may generate numerous redundant error descriptions (measured at over 500 for a single prompt segment), causing optimization objectives to diverge and key correction directions to be obscured.
+- **History Pollution**: The linear cumulative optimization paradigm continuously propagates error modification records generated during early iterations to subsequent rounds. Once early deviations from the correct direction occur, errors accumulate continuously, ultimately causing scores to stagnate at local optima.
 
-### 2.2 L1局部重试（Local Retry）
+Inspired by **PixelCraft's Planner-Critic architecture** (Microsoft, 2025)—which introduces a critic agent to review reasoning trajectories and triggers backtracking when errors are detected—this paper proposes **CriticPilot**, an extension to GenPilot. CriticPilot embeds the Planner-Critic mechanism into the original optimization process, endowing the system with self-correction capabilities through error aggregation and hierarchical backtracking, achieving an efficient closed loop for test-time prompt optimization. Experiments demonstrate that CriticPilot achieves an average score improvement of 0.4118 points across 10 batches of complex prompts while reducing average evaluation rounds by 1.5.
 
-当当前轮次生成的所有候选提示词评估后，最高分低于阈值（满分15分，当前默认阈值设为13）时，判定该轮搜索区域质量过低。系统放弃本轮结果，并在相同优化上下文中以更高多样性重新生成候选（候选数翻倍）。该模块在微观层面进行分支探索，以低成本挽救因采样随机性导致的劣质轮次。
+The main contributions of this paper are as follows:
+1. Identified the two bottlenecks of error overload and history pollution in GenPilot's linear optimization process;
+2. Proposed CriticPilot, a lightweight self-correction framework incorporating an error aggregator, L1 local retry, and L3 global reset;
+3. Validated the effectiveness and efficiency of the proposed mechanisms across multiple complex prompt batches.
 
-### 2.3 L3全局重置（Global Reset）
+---
 
-系统持续追踪最高得分的变化。若连续2轮得分提升幅度均小于1.0分，则搜索被判定为停滞。此时触发全局重置：清空所有累积的历史错误修改记录（history buffer），迫使下一轮从当前最优提示词重新开始规划。该机制打破了错误历史对搜索方向的束缚，使系统有机会跳出局部最优。
+## 2. Related Work
 
-## 3. 实验设置
+### 2.1 GenPilot: Test-Time Prompt Optimization
 
-- **模型与计算平台**：错误分析采用多模态大模型Qwen3-VL-8B-Instruct；文本到图像生成使用FLUX.1（black-forest-labs/FLUX.1-schnell）。所有代码基于GenPilot框架构建，项目开源在 https://github.com/zdleeeeee/PlannerCritic-GenPilot。
+GenPilot (Yuan et al., 2025) is a multi-agent test-time prompt optimization system that iteratively improves prompts through two stages: the **error analysis stage** utilizes VQA and Captioning agents to identify semantic inconsistencies between generated images and prompts; the **prompt optimization stage** generates multiple candidate corrections, selects the optimal one through scoring and clustering, and proceeds to the next iteration.
 
-- **测试数据**：10个测试批次，每批包含若干精心构造的复杂提示词，覆盖物体计数、空间关系、属性绑定等典型失败模式。
+**Limitations**: GenPilot's process is strictly linear with no process-level verification mechanisms. As stated in the paper, "VQA-based error detection is unreliable in complex scenarios." If deviations occur during the error analysis stage, subsequent optimization builds upon erroneous premises, and the system cannot detect or recover from them.
 
-- **基线（Baseline）**：标准GenPilot优化流程，不含任何CriticPilot模块。
+### 2.2 PixelCraft: Planner-Critic Architecture
 
-- **评估指标**：
-  - 生成质量：统一的多模态评分模型自动评定，满分15分
-  - 计算开销：实际调用图像生成与评分的轮次（Scored Rounds）
-  - 机制活跃度：L1局部重试与L3全局重置的触发次数
+PixelCraft (Microsoft, 2025) is a multi-agent visual reasoning system whose core innovation lies in its **Planner-Critic architecture**: a critic agent (Critic) is responsible for reviewing the planner's (Planner) reasoning trajectory, detecting inefficiencies or errors in tool usage sequences, and triggering backtracking and branch exploration when problems are discovered. Specific mechanisms include: (1) **Posterior refinement**: the critic reviews the entire reasoning trajectory after discussion completion; (2) **Backtracking and branching**: through image memory storing intermediate results, the planner can backtrack to previous steps when encountering contradictions and explore other reasoning paths.
 
-## 4. 实验结果
+This paper draws upon PixelCraft's core ideas, adapting them to the prompt optimization domain—replacing explicit Critic LLMs with error aggregation and score stagnation detection to achieve similar self-correction capabilities in a lightweight manner.
 
-### 4.1 总体评分表现
+---
 
-10个批次的汇总数据显示，CriticPilot平均得分达到13.7604，基线为13.3485，提升**+0.4118分**。除Batch6基本持平（Δ = -0.033）外，其余7个批次均录得正向收益，其中Batch4增益最显著，Δ达+0.841，证明该机制具有良好的泛化性。
+## 3. Method
+
+CriticPilot inserts three core modules into GenPilot's standard optimization loop, with the overall architecture shown in Figure 1.
+
+Figure 1: CriticPilot Architecture Overview
+
+![](overall/CriticPilotArchitecture.png)
+
+### 3.1 Error Aggregator
+
+**Problem**: Fine-grained error analysis may generate numerous redundant errors (measured at over 500 for a single segment), causing optimization objectives to diverge.
+
+**Method**: Before each round of optimization, perform semantic clustering on all error feedback related to the current prompt, deduplicate by dimensions such as entity and attributes, and constrain the number of errors associated with each prompt segment to no more than 5.
+
+**Effect**: Compresses redundant errors by an order of magnitude, focusing on key correction points and fundamentally avoiding optimization signal overload.
+
+### 3.2 L1 Local Retry
+
+**Problem**: Candidate prompts generated in a single round may have overall low quality (e.g., due to sampling randomness).
+
+**Detection Condition**: The highest score among all candidate prompts in the current round is less than 13 (out of 15 points).
+
+**Action**: Discard the current round's results and regenerate candidates with higher diversity in the same optimization context (candidate count doubled).
+
+**Design Rationale**: Drawing from PixelCraft's "branching" concept, conducting branch exploration at the micro-level to rescue low-quality rounds caused by sampling randomness at low cost.
+
+### 3.3 L3 Global Reset
+
+**Problem**: Historical modification records (history buffer) may be contaminated by erroneous information, causing optimization to become trapped in local optima.
+
+**Detection Condition**: For 2 consecutive rounds, the maximum score improvement is less than 1.0 points.
+
+**Action**: Clear all accumulated historical error modification records, forcing the next round to restart planning from the current optimal prompt.
+
+**Design Rationale**: Drawing from PixelCraft's "backtracking" concept, breaking the constraints of erroneous history on the search direction, giving the system the opportunity to escape local optima.
+
+---
+
+## 4. Experiments
+
+### 4.1 Experimental Setup
+
+**Models and Computing Platform**:
+- Error analysis: Qwen3-VL-8B-Instruct
+- Text-to-image generation: FLUX.1 (black-forest-labs/FLUX.1-schnell)
+- All code built upon the GenPilot framework
+
+**Test Data**: 10 test batches, each containing several carefully constructed complex prompts covering typical failure patterns such as object counting, spatial relationships, and attribute binding.
+
+**Baseline**: Standard GenPilot optimization process without any CriticPilot modules.
+
+**Evaluation Metrics**:
+- Generation quality: automatically assessed by a unified multimodal scoring model, maximum 15 points
+- Computational overhead: actual rounds of image generation and scoring calls (Scored Rounds)
+- Mechanism activity: trigger counts for L1 local retry and L3 global reset
+
+### 4.2 Overall Scoring Performance
+
+Aggregated data from 10 batches shows that CriticPilot achieves an average score of 13.7604, compared to the baseline of 13.3485, an improvement of **+0.4118 points**. Except for Batch6, which remains essentially flat (Δ = -0.033), all other 9 batches record positive gains, with Batch4 showing the most significant improvement with Δ reaching +0.841, demonstrating the mechanism's good generalizability.
+
+Table 1: Overall Scoring Performance (10 Batches)
 
 | Batch   | Baseline avg | Critic avg | Delta  | L1   | L3   | Baseline scored rounds | Critic  scored rounds | Scored rounds  difference |
 | ------- | ------------ | ---------- | ------ | ---- | ---- | ---------------------- | --------------------- | ------------------------- |
@@ -64,80 +124,114 @@ CriticPilot在GenPilot的标准优化循环中插入以下三个核心模块：
 | 10      | 13.875       | 14.333     | 0.458  | 1    | 1    | 32                     | 21                    | -11                       |
 | Overall | 13.3485      | 13.7604    | 0.4118 | 14.2 | 2.8  | 43                     | 41.5                  | -1.5                      |
 
+Figure 2: Baseline vs CriticPilot Image Quality Average Score Comparison
+
 ![](overall\Baseline-avg-vs-Critic-avg.png)
+
+Figure 3: CriticPilot Relative to Baseline Image Quality Average Score Difference
 
 ![Delta](overall\Delta.png)
 
-### 4.2 计算开销与效率
+### 4.3 Computational Overhead and Efficiency
 
-通常情况下，重试与重置机制会带来额外计算开销。然而实验数据表明：CriticPilot的平均评估轮次为41.5，低于基线的43，平均减少**1.5轮**。原因在于L1与L3起到了“剪枝”与“导航”的双重作用：局部重试避免了无效低分轮次被计入并浪费后续优化；全局重置则果断终止停滞路径，将计算资源重新投向更宽广的搜索空间。
+Typically, retry and reset mechanisms introduce additional computational overhead. However, experimental data shows that CriticPilot's average evaluation rounds are 41.5, lower than the baseline's 43, an average reduction of **1.5 rounds**. The reason is that L1 and L3 serve a dual role of "pruning" and "navigation": local retry prevents invalid low-score rounds from being counted and wasting subsequent optimization; global reset decisively terminates stagnant paths, redirecting computational resources to a broader search space.
+
+Figure 4: Baseline vs CriticPilot Average Evaluation Rounds
 
 ![](overall\Baseline-scored-rounds-vs-Critic-scored-rounds.png)
 
+Figure 5: CriticPilot Relative to Baseline Average Evaluation Rounds Difference
+
 ![Scored rounds difference](overall\Scored-rounds-difference.png)
 
-### 4.3 机制触发频率
+### 4.4 Mechanism Trigger Frequency
 
-统计每个批次的平均触发次数：L1触发14.2次，L3触发2.8次。L1的高频触发说明原始优化过程中经常产生低质量候选，局部重试提供了一种廉价的自救手段。L3触发频次较低但意义重大——每次全局重置都使系统挣脱错误历史的束缚，获得重新探索并找到更优解的机会（如Batch4中L3触发后分数显著跃升）。这一频率印证了停滞并非偶发现象，而是线性优化固有的弊端。
+Statistics on average trigger counts per batch show: L1 triggers 14.2 times, L3 triggers 2.8 times. The high frequency of L1 triggers indicates that low-quality candidates are frequently generated during the original optimization process, and local retry provides an inexpensive self-rescue mechanism. The lower but significant frequency of L3 triggers—each global reset enables the system to break free from erroneous history and gain opportunities to re-explore and find better solutions (such as the significant score jump after L3 triggering in Batch4). This frequency confirms that stagnation is not an occasional phenomenon but an inherent drawback of linear optimization.
+
+Figure 6: L1 and L3 Trigger Counts
 
 ![](overall\L1-and-L3-trigger-counts.png)
 
-## 5. 案例分析与异常值探讨
+### 4.5 Case Analysis
 
-### 5.1 成功案例A：精确计数约束（Batch1）
+#### Success Case A: Precise Counting Constraint (Batch1)
 
-原始提示词（节选）：“A cabbage field with exactly 8 cabbages, each cabbage has dewdrops, and
-the field is covered with light mist.”
+**Original Prompt (excerpt)**: "A cabbage field with exactly 8 cabbages, each cabbage has dewdrops, and the field is covered with light mist."
 
-Baseline 问题：生成的卷心菜数量经常偏离 8，且露珠、薄雾时常丢失，得分在 12 分左右震荡。
+**Baseline Problem**: The number of cabbages generated frequently deviates from 8, and dewdrops and mist are often lost, with scores oscillating around 12.
 
-机制作用：Error Aggregator 将错误聚焦于“计数”与“可见度”。通过 L1/L3 的反复介入，系统演化出极强的硬性约束，例如：“… featuring exactly eight distinct cabbages, no more and no fewer. Every
-cabbage must display visible dew droplets. A light veil of mist hangs over the entire field …”。最高
-分从 13 跃升至 15（满分），优化上限被成功打破。
+**Mechanism Effect**: The error aggregator focuses errors on "counting" and "visibility". Through repeated L1/L3 intervention, the system evolves extremely strong hard constraints, for example: "… featuring exactly eight distinct cabbages, no more and no fewer. Every cabbage must display visible dew droplets. A light veil of mist hangs over the entire field …". The highest score jumped from 13 to 15 (perfect score), successfully breaking the optimization ceiling.
 
-### 5.2 成功案例B：消除物体幻觉（Batch4）
+#### Success Case B: Eliminating Object Hallucination (Batch4)
 
-原始提示词：“A silver bracelet resting on a chessboard, the bracelet is compact, not larger than
-one square.”
+**Original Prompt**: "A silver bracelet resting on a chessboard, the bracelet is compact, not larger than one square."
 
-Baseline 问题：产生严重幻觉，将“银手镯”错误生成为带管状结构的“听诊器”，且尺寸巨大横跨多个棋
-盘格。
+**Baseline Problem**: Produced severe hallucinations, incorrectly generating "stethoscopes" with tubular structures instead of "silver bracelets", and the size was enormous, spanning multiple chessboard squares.
 
-机制作用：错误聚合锁定“错误物体类型”和“尺寸失控”两大核心问题。系统生成了高度针对性的负面提示
-词（明确排除听诊器部件，如 “no chestpiece, no tubes”）以及利用场景参照物的空间约束（“the
-bracelet must be no larger than one chessboard square”）。稳定消除了幻觉，大幅提高了生成质量
-下限，最低分轮次显著减少，因此 Batch 4 的 Δ 高达 +0.841。
+**Mechanism Effect**: Error aggregation locked onto two core issues: "incorrect object type" and "uncontrolled size". The system generated highly targeted negative prompts (explicitly excluding stethoscope components, such as "no chestpiece, no tubes") and utilized spatial constraints with scene reference objects ("the bracelet must be no larger than one chessboard square"). Hallucinations were stably eliminated, significantly raising the lower bound of generation quality and greatly reducing low-score rounds, thus Batch4's Δ reached as high as +0.841.
 
-### 5.3 异常值剖析：Batch6
+#### Outlier Analysis: Batch6
 
-在所有 10 个批次中，Batch 6 是唯一 Δ 为负（‑0.033）的批次。两者最高分均为满分 15，评估轮次也
-完全相同（60 轮），差异仅来源于候选质量的微小波动。
+Among all 10 batches, Batch6 is the only one with a negative Δ (-0.033). Both achieved perfect scores of 15, and evaluation rounds were identical (60 rounds), with differences only stemming from minor fluctuations in candidate quality.
 
-案例细节：提示词要求 “A vintage fan with a rounded base placed beside an antique knife on a
-wooden table”。Baseline 表现已较强，但 Critic 为强化风扇与刀的区分，采取了过于激进的排他性描述
-（如 “loose circular fan head / no pedestal base”），这反而偏离了原始提示中关于 “rounded base”
-的固有要求，导致部分轮次分数轻微下降。
+**Case Details**: The prompt required "A vintage fan with a rounded base placed beside an antique knife on a wooden table". The baseline performance was already strong, but Critic, to strengthen the distinction between the fan and knife, adopted overly aggressive exclusive descriptions (such as "loose circular fan head / no pedestal base"), which deviated from the original prompt's inherent requirement for "rounded base", causing slight score decreases in some rounds.
 
-根因与启示：当 Baseline 已逼近性能上限，或原始提示本身存在语义歧义时，Critic 的强约束可能导致
-过度修正。该边界条件揭示：未来可引入自适应干预策略，在优化后期适当降低重试与重置的激进程
-度，以避免因过度拟合错误信号而引入新矛盾。总体而言，Batch 6 更应被视为 “Critic 与 Baseline 基
-本持平”，而非显著失败。
-
-## 6. 结论
-
-本次实验验证了CriticPilot的核心价值：
-
-1. **增效不增本**：在平均评估轮次减少2.75轮的前提下，平均得分提升+0.483分，证明“质量控制与错误回溯”比“单纯堆叠迭代轮数”更为重要。
-2. **上下限双提升**：L1局部重试抑制低分轮次，稳固性能下限；L3全局重置清除历史污染，拔高分数上限。
-3. **高鲁棒性**：在87.5%的测试批次中获正向收益，仅在一个存在歧义的场景中出现可接受的微小回退，未发生崩溃。
-
-综上，CriticPilot作为一种架构改动极小、无额外LLM调用的轻量级方案，以较高的效费比在一定程度上解决了提示词自动优化中的算力浪费与停滞难题。
+**Root Cause and Insights**: When the baseline already approaches performance limits, or when the original prompt itself has semantic ambiguity, Critic's strong constraints may lead to over-correction. This boundary condition reveals that future work could introduce adaptive intervention strategies, appropriately reducing the aggressiveness of retry and reset in later optimization stages to avoid introducing new contradictions due to overfitting to error signals. Overall, Batch6 should be regarded as "Critic essentially on par with Baseline" rather than a significant failure.
 
 ---
 
-## 附录：系统实现与复现指南
+## 5. Conclusion
 
-### 项目结构
+This paper proposes CriticPilot, a lightweight extension to GenPilot that addresses the problems of error overload and history pollution in the linear optimization process by embedding a Planner-Critic mechanism. Experiments validate the core value of CriticPilot:
+
+1. **Efficiency Without Cost**: Under the premise of reducing average evaluation rounds by 1.5, the average score improved by 0.4118 points, proving that "quality control and error backtracking" is more important than "simply stacking iteration rounds".
+
+2. **Dual Improvement of Upper and Lower Bounds**: L1 local retry suppresses low-score rounds, stabilizing the performance floor; L3 global reset clears historical contamination, elevating the score ceiling.
+
+3. **High Robustness**: Achieved positive gains in 90% of test batches, with only one ambiguous scenario showing an acceptable minor regression, and no crashes occurred.
+
+In summary, CriticPilot, as a lightweight solution with minimal architectural changes and no additional LLM calls, addresses the problems of computational waste and stagnation in automated prompt optimization with a high cost-effectiveness ratio. Future work will explore adaptive intervention strategies to appropriately reduce the aggressiveness of retry and reset in later optimization stages to avoid introducing new contradictions due to over-correction.
+
+---
+
+## References
+
+1. @misc{ye2025genpilotmultiagenttesttimeprompt,
+         title={GenPilot: A Multi-Agent System for Test-Time Prompt Optimization in Image Generation}, 
+         author={Wen Ye and Zhaocheng Liu and Yuwei Gui and Tingyu Yuan and Yunyue Su and Bowen Fang and Chaoyang Zhao and Qiang Liu and Liang Wang},
+         year={2025},
+         eprint={2510.07217},
+         archivePrefix={arXiv},
+         primaryClass={cs.CV},
+         url={https://arxiv.org/abs/2510.07217}, 
+   }
+
+2. @misc{zhang2025pixelcraftmultiagenthighfidelityvisual,
+         title={PixelCraft: A Multi-Agent System for High-Fidelity Visual Reasoning on Structured Images}, 
+         author={Shuoshuo Zhang and Zijian Li and Yizhen Zhang and Jingjing Fu and Lei Song and Jiang Bian and Jun Zhang and Yujiu Yang and Rui Wang},
+         year={2025},
+         eprint={2509.25185},
+         archivePrefix={arXiv},
+         primaryClass={cs.CV},
+         url={https://arxiv.org/abs/2509.25185}, 
+   }
+
+3. GenPilot Open Source Code. https://github.com/27yw/GenPilot
+
+---
+
+## Appendix A: Division of Labor
+
+- **Li Zedong(李泽栋) 23307130271**: Designed experimental idea and plan, reproduced baseline, built basic project code framework, revised experimental report
+- **Yan Haopeng(颜皓鹏) 24300240240**: Implemented CriticPilot code, executed testing, recorded data
+- **Shen Zixuan(沈子轩) 24300240213**: Analyzed data, organized results
+- **Zhu Yalun(朱雅伦) 24300240187**: Wrote experimental report, created PPT
+
+---
+
+## Appendix B: System Implementation and Reproduction Guide
+
+### Project Structure
 
 ```
 PlannerCritic-GenPilot
@@ -159,35 +253,35 @@ PlannerCritic-GenPilot
 └── uv.lock
 ```
 
-### 安装与环境配置
+### Installation and Environment Configuration
 
 ```bash
-# 克隆仓库
+# Clone repository
 git clone https://github.com/zdleeeeee/PlannerCritic-GenPilot.git
 cd PlannerCritic-GenPilot
 
-# 复制环境配置文件
+# Copy environment configuration files
 cp .env.example .env
 cp genpilot/error_analysis_pipline.sh.example genpilot/error_analysis_pipline.sh
 
-# 安装依赖（使用uv）
+# Install dependencies (using uv)
 uv sync
 
-# 下载文生图模型（如需）
-hf download black-forest-labs/FLUX.1-schnell --local-dir <本地下载路径>
+# Download text-to-image model (if needed)
+hf download black-forest-labs/FLUX.1-schnell --local-dir <local download path>
 ```
 
-> **注意**：我们将genpilot环境中的`mkl-service`包从2.4.0升级至2.5.2，以解决其与Python 3.12不兼容的问题。
+> **Note**: We upgraded the `mkl-service` package from 2.4.0 to 2.5.2 in the genpilot environment to resolve its incompatibility with Python 3.12.
 
-### 运行流程
+### Running Process
 
 ```bash
 python run_baseline.py
 ```
 
-该脚本同时运行基线GenPilot与CriticPilot。
+This script runs both the baseline GenPilot and CriticPilot simultaneously.
 
-### 测试
+### Testing
 
 ```bash
 tests/test_error_taxonomy.py
