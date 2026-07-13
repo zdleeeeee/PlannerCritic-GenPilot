@@ -222,10 +222,9 @@ In summary, CriticPilot, as a lightweight solution with minimal architectural ch
 
 ## Appendix A: Division of Labor
 
-- **Li Zedong(李泽栋) 23307130271**: Designed experimental idea and plan, reproduced baseline, built basic project code framework, revised experimental report
+- **Li Zedong(李泽栋) 23307130271**: Designed experimental idea and plan, reproduced baseline, built basic project code framework, wrote experimental report and made ppt
 - **Yan Haopeng(颜皓鹏) 24300240240**: Implemented CriticPilot code, executed testing, recorded data
 - **Shen Zixuan(沈子轩) 24300240213**: Analyzed data, organized results
-- **Zhu Yalun(朱雅伦) 24300240187**: Wrote experimental report, created PPT
 
 ---
 
